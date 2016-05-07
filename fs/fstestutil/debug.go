@@ -28,8 +28,10 @@ func (f *flagDebug) Set(s string) error {
 	*f = flagDebug(v)
 	if v {
 		fuse.Debug = logMsg
+		fuse.ShouldDebug = true
 	} else {
 		fuse.Debug = nop
+		fuse.ShouldDebug = false
 	}
 	return nil
 }

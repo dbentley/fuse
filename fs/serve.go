@@ -415,6 +415,10 @@ func (s *Server) Serve(fs FS) error {
 func (s *Server) handoffServe(fs FS) {
 	defer s.wg.Done()
 
+	if fuse.Trace {
+		log.Print("fuse/fs: handoff entry")
+		defer log.Print("fuse/fs: handoff exit")
+	}
 	req, err := s.conn.ReadRequest()
 	if err != nil {
 		if err != io.EOF {
@@ -424,6 +428,9 @@ func (s *Server) handoffServe(fs FS) {
 	}
 
 	s.wg.Add(1)
+	if fuse.Trace {
+		log.Print("fuse/fs: handoff gofork")
+	}
 	go s.handoffServe(fs)
 	s.serve(req)
 }
@@ -767,6 +774,10 @@ func initLookupResponse(s *fuse.LookupResponse) {
 }
 
 func (c *Server) serve(r fuse.Request) {
+	if fuse.Trace {
+		log.Print("fuse/fs: serve entry")
+		defer log.Print("fuse/fs: serve exit")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	parentCtx := ctx
@@ -775,12 +786,19 @@ func (c *Server) serve(r fuse.Request) {
 	}
 
 	req := &serveRequest{Request: r, cancel: cancel}
+	if fuse.ShouldDebug {
+		if fuse.Trace {
+			log.Print("fuse/fs: serve b/w req and debug")
+		}
+		c.debug(request{
+			Op:      opName(r),
+			Request: r.Hdr(),
+			In:      r})
+		if fuse.Trace {
+			log.Print("fuse/fs: serve post-debug")
+		}
+	}
 
-	c.debug(request{
-		Op:      opName(r),
-		Request: r.Hdr(),
-		In:      r,
-	})
 	var node Node
 	var snode *serveNode
 	c.meta.Lock()

@@ -106,6 +106,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"sync"
 	"syscall"
@@ -589,7 +590,9 @@ func (c *Conn) ReadRequest() (Request, error) {
 	m := getMessage(c)
 loop:
 	c.rio.RLock()
+	log.Print("fuse ReadRequest blocking pre")
 	n, err := syscall.Read(c.fd(), m.buf)
+	log.Print("fuse ReadRequest blocking post")
 	c.rio.RUnlock()
 	if err == syscall.EINTR {
 		// OSXFUSE sends EINTR to userspace when a request interrupt
@@ -1153,7 +1156,9 @@ func (c *Conn) writeToKernel(msg []byte) error {
 
 	c.wio.RLock()
 	defer c.wio.RUnlock()
+	log.Print("fuse writeToKernel pre-write")
 	nn, err := syscall.Write(c.fd(), msg)
+	log.Print("fuse writeToKernel write done")
 	if err == nil && nn != len(msg) {
 		Debug(bugShortKernelWrite{
 			Written: int64(nn),
@@ -1166,6 +1171,10 @@ func (c *Conn) writeToKernel(msg []byte) error {
 }
 
 func (c *Conn) respond(msg []byte) {
+	if Trace {
+		log.Print("fuse respond enter")
+		defer log.Print("fuse respond exit")
+	}
 	if err := c.writeToKernel(msg); err != nil {
 		Debug(bugKernelWriteError{
 			Error: errorString(err),
