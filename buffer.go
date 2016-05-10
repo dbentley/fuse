@@ -1,35 +1,40 @@
 package fuse
 
-import "unsafe"
+import (
+	"fmt"
+	"unsafe"
+)
 
-// buffer provides a mechanism for constructing a message from
-// multiple segments.
+// buffer provides a mechanism to write out a message in segments. This is useful because
+// the fuse protocol means we have to assemble one contiguous byte array with several headers
+// and then data.
 type buffer []byte
 
-// alloc allocates size bytes and returns a pointer to the new
-// segment.
-func (w *buffer) alloc(size uintptr) unsafe.Pointer {
-	s := int(size)
+func newBuffer(buf *buffer, bytes []byte) {
+	*buf = bytes[0:0]
+}
+
+// newSegment creates a new segment of newSize bytes and returns a pointer to the new segment.
+func (w *buffer) newSegment(newSize uintptr) unsafe.Pointer {
+	return unsafe.Pointer(&(w.newSlice(newSize)[0]))
+}
+
+func (w *buffer) newSlice(newSize uintptr) []byte {
+	s := int(newSize)
 	if len(*w)+s > cap(*w) {
-		old := *w
-		*w = make([]byte, len(*w), 2*cap(*w)+s)
-		copy(*w, old)
+		panic(fmt.Sprintf("Not enough capacity: %v + %v > %v", len(*w), newSize, cap(*w)))
 	}
 	l := len(*w)
 	*w = (*w)[:l+s]
-	return unsafe.Pointer(&(*w)[l])
+	return (*w)[l : l+s]
 }
 
-// reset clears out the contents of the buffer.
-func (w *buffer) reset() {
-	for i := range (*w)[:cap(*w)] {
-		(*w)[i] = 0
+func (w *buffer) truncate(extra int) {
+	l := len(*w)
+	clear := (*w)[l-extra:]
+	for i := range clear {
+		clear[i] = 0
 	}
-	*w = (*w)[:0]
-}
 
-func newBuffer(extra uintptr) buffer {
-	const hdrSize = unsafe.Sizeof(outHeader{})
-	buf := make(buffer, hdrSize, hdrSize+extra)
-	return buf
+	*w = (*w)[:l-extra]
 }

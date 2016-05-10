@@ -883,7 +883,6 @@ func (c *Server) serve(r fuse.Request) {
 			r.RespondError(err)
 			return
 		}
-
 		if !responded {
 			err := handlerTerminatedError{
 				Request: r,
