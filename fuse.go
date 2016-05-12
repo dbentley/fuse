@@ -375,135 +375,6 @@ func (e Errno) MarshalText() ([]byte, error) {
 	return []byte(s), nil
 }
 
-// func (h *Header) RespondError(err error) {
-// 	errno := DefaultErrno
-// 	if ferr, ok := err.(ErrorNumber); ok {
-// 		errno = ferr.Errno()
-// 	}
-// 	// FUSE uses negative errors!
-// 	// TODO: File bug report against OSXFUSE: positive error causes kernel panic.
-// 	buf := newBuffer(0)
-// 	hOut := (*outHeader)(unsafe.Pointer(&buf[0]))
-// 	hOut.Error = -int32(errno)
-// 	h.respond(buf)
-// }
-
-// Maximum file write size we are prepared to receive from the kernel.
-const maxWrite = 16 * 1024 * 1024
-
-// All requests read from the kernel, without data, are shorter than
-// this.
-var maxRequestSize = syscall.Getpagesize()
-var bufSize = maxRequestSize + maxWrite
-
-type Buffers struct {
-	// Raw []bytes
-	inBytes  []byte
-	outBytes []byte
-
-	reqBytes  []byte
-	respBytes []byte
-
-	allocBytes []byte
-
-	// Higher-level but still bytes
-	reqMsg  message
-	respBuf buffer
-
-	alloc allocator
-	scope RequestScope
-}
-
-func MakeBuffers() (r *Buffers) {
-	r = new(Buffers)
-	r.inBytes = make([]byte, bufSize)
-	r.outBytes = make([]byte, bufSize)
-	// This is way too many bytes for what we need
-	r.reqBytes = make([]byte, bufSize)
-	r.respBytes = make([]byte, bufSize)
-	r.allocBytes = make([]byte, bufSize)
-	r.alloc.init(r.allocBytes)
-	r.scope.bufs = r
-	return r
-}
-
-func (b *Buffers) Reset() *RequestScope {
-	clear := b.inBytes[0:len(b.reqMsg.buf)]
-	for i := range clear {
-		clear[i] = 0
-	}
-
-	clear = b.outBytes[0:len(b.respBuf)]
-	for i := range clear {
-		clear[i] = 0
-	}
-
-	b.reqMsg.buf = b.inBytes[:]
-	b.reqMsg.hdr = (*inHeader)(unsafe.Pointer(&b.inBytes[0]))
-	newBuffer(&b.respBuf, b.outBytes)
-
-	b.alloc.reset()
-
-	b.scope.Req = nil
-	b.scope.reqMsg = &b.reqMsg
-	b.scope.respBuf = &b.respBuf
-	b.scope.conn = nil
-	b.scope.Alloc = &b.alloc
-	b.scope.responded = false
-
-	return &b.scope
-}
-
-type RequestScope struct {
-	Req       Request
-	reqMsg    *message
-	respBuf   *buffer
-	bufs      *Buffers
-	conn      *Conn
-	Alloc     *allocator
-	responded bool
-}
-
-type Allocator interface {
-	Alloc(size int) []byte
-	Free(size int)
-}
-
-type allocator struct {
-	buf  []byte
-	next int
-}
-
-func (a *allocator) init(buf []byte) {
-	a.buf = buf
-	a.next = 0
-}
-
-func (a *allocator) Alloc(size int) []byte {
-	s := int(size)
-	if a.next+s > cap(a.buf) {
-		panic(fmt.Sprintf("Not enough capacity: %v + %v > %v", a.next, size, cap(a.buf)))
-	}
-	r := a.buf[a.next : a.next+s]
-	a.next += s
-	return r
-}
-
-func (a *allocator) Free(size int) {
-	a.next -= size
-	if a.next < 0 {
-		panic(fmt.Sprintf("allocator.next below 0: %v %v", a.next, size))
-	}
-}
-
-func (a *allocator) reset() {
-	b := a.buf[0:a.next]
-	for idx := range b {
-		b[idx] = 0
-	}
-	a.next = 0
-}
-
 // a message represents the bytes of a single FUSE message
 type message struct {
 	buf []byte    // all bytes
@@ -987,12 +858,12 @@ loop:
 		if m.len() < unsafe.Sizeof(*in) {
 			goto corrupt
 		}
-		req = &FlushRequest{
-			Header:    m.Header(),
-			Handle:    HandleID(in.Fh),
-			Flags:     in.FlushFlags,
-			LockOwner: in.LockOwner,
-		}
+		r := (*FlushRequest)(scope.req())
+		r.Header = m.Header()
+		r.Handle = HandleID(in.Fh)
+		r.Flags = in.FlushFlags
+		r.LockOwner = in.LockOwner
+		scope.Req = r
 
 	case opInit:
 		in := (*initIn)(m.data())
@@ -2256,10 +2127,10 @@ func (r *FlushRequest) String() string {
 }
 
 // Respond replies to the request, indicating that the flush succeeded.
-// func (r *FlushRequest) Respond() {
-// 	buf := newBuffer(0)
-// 	r.respond(buf)
-// }
+func (r *FlushRequest) Respond(s *RequestScope) {
+	s.serializeHeader()
+	s.respond()
+}
 
 // A RemoveRequest asks to remove a file or directory from the
 // directory r.Node.
