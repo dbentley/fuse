@@ -83,3 +83,8 @@ const requestScopeSize = unsafe.Sizeof(RequestScope{})
 func (s *RequestScope) Release() {
 	// TODO(dbentley): here is where we could respond if we haven't responded yet
 }
+
+func (s *RequestScope) respond(data []byte) {
+	// TODO(dbentley): here is where we could record that we've responded
+	s.conn.Respond(data)
+}
