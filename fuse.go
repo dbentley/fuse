@@ -22,45 +22,7 @@
 
 // Package fuse enables writing FUSE file systems on Linux, OS X, and FreeBSD.
 //
-// On OS X, it requires OSXFUSE (http://osxfuse.github.com/).
-//
-// TODO(dbentley): rewrite all of this
-//
-// There are two approaches to writing a FUSE file system.  The first is to speak
-// the low-level message protocol, reading from a Conn using ReadRequest and
-// writing using the various Respond methods.  This approach is closest to
-// the actual interaction with the kernel and can be the simplest one in contexts
-// such as protocol translators.
-//
-// Servers of synthesized file systems tend to share common
-// bookkeeping abstracted away by the second approach, which is to
-// call fs.Serve to serve the FUSE protocol using an implementation of
-// the service methods in the interfaces FS* (file system), Node* (file
-// or directory), and Handle* (opened file or directory).
-// There are a daunting number of such methods that can be written,
-// but few are required.
-// The specific methods are described in the documentation for those interfaces.
-//
-// The hellofs subdirectory contains a simple illustration of the fs.Serve approach.
-//
-// Service Methods
-//
-// The required and optional methods for the FS, Node, and Handle interfaces
-// have the general form
-//
-//	Op(ctx context.Context, req *OpRequest, resp *OpResponse) error
-//
-// where Op is the name of a FUSE operation. Op reads request
-// parameters from req and writes results to resp. An operation whose
-// only result is the error result omits the resp parameter.
-//
-// Multiple goroutines may call service methods simultaneously; the
-// methods being called are responsible for appropriate
-// synchronization.
-//
-// The operation must not hold on to the request or response,
-// including any []byte fields such as WriteRequest.Data or
-// SetxattrRequest.Xattr.
+// This is adapted from http://github.com/bazil/fuse aka bazil.org/fuse
 //
 // Errors
 //
@@ -100,7 +62,7 @@
 // Behavior and metadata of the mounted file system can be changed by
 // passing MountOption values to Mount.
 //
-package fuse // import "bazil.org/fuse"
+package fuse // import "github.com/scootdev/fuse"
 
 import (
 	"fmt"
